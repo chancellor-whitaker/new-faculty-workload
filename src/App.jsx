@@ -1,58 +1,21 @@
 import { AgGridReact } from "ag-grid-react";
 import { useState, useMemo } from "react";
 
-import VerticalDndList from "./components/VerticalDndList";
+import toggleDropdownValue from "./utils/toggleDropdownValue";
+import MultipleDndLists from "./components/MultipleDndLists";
 import DropdownButton from "./components/DropdownButton";
+import SubContainer from "./components/SubContainer";
 import DropdownMenu from "./components/DropdownMenu";
 import DropdownItem from "./components/DropdownItem";
+import getFieldValues from "./utils/getFieldValues";
+import filterRowData from "./utils/filterRowData";
 import FormCheck from "./components/FormCheck";
 import Popover from "./components/Popover";
+import groupData from "./utils/groupData";
 import useData from "./hooks/useData";
 
 // add total row
 //
-
-const filterRowData = (rows, dropdowns) =>
-  rows.filter((row) => {
-    for (const [field, value] of Object.entries(row)) {
-      if (field in dropdowns && !dropdowns[field].has(value)) {
-        return false;
-      }
-    }
-
-    return true;
-  });
-
-const getFieldValues = (data) => {
-  const store = {};
-
-  const rows = [data].filter(Boolean).flat();
-
-  rows.forEach((row) =>
-    Object.entries(row).forEach(([field, value]) => {
-      if (!(field in store)) store[field] = new Set();
-
-      store[field].add(value);
-    })
-  );
-
-  return Object.fromEntries(
-    Object.entries(store).map(([field, set]) => [field, [...set].sort()])
-  );
-};
-
-const toggleDropdownValue = (field, value, setter) =>
-  setter((state) => {
-    const newState = { ...state };
-
-    newState[field] = new Set(newState[field]);
-
-    const set = newState[field];
-
-    set.has(value) ? set.delete(value) : set.add(value);
-
-    return newState;
-  });
 
 // const descriptiveFields = [
 //   "instructor_department",
@@ -80,6 +43,13 @@ const toggleDropdownValue = (field, value, setter) =>
 export default function App() {
   const rowData = useData("data.json");
 
+  const x = useMemo(
+    () => groupData(rowData, ["instructor_college"]),
+    [rowData]
+  );
+
+  console.log(x);
+
   const { initialDropdowns, initialColDefs, fieldValues } = useMemo(() => {
     const fieldValues = !Array.isArray(rowData)
       ? null
@@ -103,14 +73,9 @@ export default function App() {
     return { initialDropdowns, initialColDefs, fieldValues };
   }, [rowData]);
 
-  const [colDefs, setColDefs] = useState(null);
+  // const [colDefs, setColDefs] = useState(null);
 
-  if (initialColDefs && !colDefs) setColDefs(initialColDefs);
-
-  const toggleColVisibility = ({ target: { checked, value } }) =>
-    setColDefs((state) =>
-      state.map((el) => (el.field !== value ? el : { ...el, hide: !checked }))
-    );
+  // if (initialColDefs && !colDefs) setColDefs(initialColDefs);
 
   const [dropdowns, setDropdowns] = useState(null);
 
@@ -126,47 +91,77 @@ export default function App() {
 
   // console.log(filteredRowData);
 
+  const [dndState, setDndState] = useState(null);
+
+  if (initialColDefs && !dndState) {
+    setDndState({ columns: initialColDefs, rowGroups: [], values: [] });
+  }
+
+  const colDefs = !dndState
+    ? null
+    : [...dndState.rowGroups, ...dndState.columns, ...dndState.values];
+
+  const toggleColVisibility = ({ target: { checked, value, name } }) =>
+    setDndState((state) =>
+      Object.fromEntries(
+        Object.entries(state).map((entry) =>
+          entry[0] !== name
+            ? entry
+            : [
+                entry[0],
+                entry[1].map((el) =>
+                  el.field !== value ? el : { ...el, hide: !checked }
+                ),
+              ]
+        )
+      )
+    );
+
   return (
     <main className="container">
-      <div className="my-3 p-3 bg-body rounded shadow-sm">
-        <VerticalDndList setState={setColDefs} state={colDefs} idKey="field">
-          {({ field, hide }) => (
-            <>
-              <div className="d-flex align-items-center">
-                <FormCheck
-                  onChange={toggleColVisibility}
-                  checked={!hide}
-                  value={field}
-                ></FormCheck>
-                <Popover>
-                  <DropdownButton>{field}</DropdownButton>
-                  <DropdownMenu>
-                    {(fieldValues && field in fieldValues
-                      ? fieldValues[field]
-                      : []
-                    ).map((value) => (
-                      <DropdownItem
-                        onClick={() =>
-                          toggleDropdownValue(field, value, setDropdowns)
-                        }
-                        active={isDropdownItemActive(field, value)}
-                        key={value}
-                      >
-                        {value}
-                      </DropdownItem>
-                    ))}
-                  </DropdownMenu>
-                </Popover>
-              </div>
-            </>
+      <SubContainer>
+        <MultipleDndLists
+          setState={setDndState}
+          itemContentKey="field"
+          itemIdKey="field"
+          state={dndState}
+        >
+          {({ field, hide }, listId) => (
+            <div className="d-flex align-items-center">
+              <FormCheck
+                onChange={toggleColVisibility}
+                checked={!hide}
+                value={field}
+                name={listId}
+              ></FormCheck>
+              <Popover>
+                <DropdownButton>{field}</DropdownButton>
+                <DropdownMenu>
+                  {(fieldValues && field in fieldValues
+                    ? fieldValues[field]
+                    : []
+                  ).map((value) => (
+                    <DropdownItem
+                      onClick={() =>
+                        toggleDropdownValue(field, value, setDropdowns)
+                      }
+                      active={isDropdownItemActive(field, value)}
+                      key={value}
+                    >
+                      {value}
+                    </DropdownItem>
+                  ))}
+                </DropdownMenu>
+              </Popover>
+            </div>
           )}
-        </VerticalDndList>
-      </div>
-      <div className="my-3 p-3 bg-body rounded shadow-sm">
+        </MultipleDndLists>
+      </SubContainer>
+      <SubContainer>
         <div style={{ height: 500 }}>
           <AgGridReact rowData={filteredRowData} columnDefs={colDefs} />
         </div>
-      </div>
+      </SubContainer>
     </main>
   );
 }
