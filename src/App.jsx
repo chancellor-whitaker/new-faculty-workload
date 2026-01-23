@@ -1,3 +1,14 @@
+import {
+  mean as avg,
+  n as count,
+  summarize,
+  first,
+  tidy,
+  last,
+  sum,
+  max,
+  min,
+} from "@tidyjs/tidy";
 import { AgGridReact } from "ag-grid-react";
 import { useState, useMemo } from "react";
 
@@ -15,7 +26,8 @@ import groupData from "./utils/groupData";
 import useData from "./hooks/useData";
 
 // add total row
-//
+// identify what has been filtered (hidden by list)
+// pivoting (similar to ag grid pivot mode col toolbar)
 
 // const descriptiveFields = [
 //   "instructor_department",
@@ -40,15 +52,12 @@ import useData from "./hooks/useData";
 // ! what happens if you choose pivot mode on ag grid tool bar?
 // ! dropdowns need "all" buttons
 
+// avg, count, first, last, max, min, sum
+
+const agg2Tidy = { first, count, last, sum, max, min, avg };
+
 export default function App() {
   const rowData = useData("data.json");
-
-  const x = useMemo(
-    () => groupData(rowData, ["instructor_college"]),
-    [rowData]
-  );
-
-  console.log(x);
 
   const { initialDropdowns, initialColDefs, fieldValues } = useMemo(() => {
     const fieldValues = !Array.isArray(rowData)
@@ -73,10 +82,6 @@ export default function App() {
     return { initialDropdowns, initialColDefs, fieldValues };
   }, [rowData]);
 
-  // const [colDefs, setColDefs] = useState(null);
-
-  // if (initialColDefs && !colDefs) setColDefs(initialColDefs);
-
   const [dropdowns, setDropdowns] = useState(null);
 
   if (initialDropdowns && !dropdowns) setDropdowns(initialDropdowns);
@@ -89,8 +94,6 @@ export default function App() {
   const isDropdownItemActive = (field, value) =>
     dropdowns && field in dropdowns && dropdowns[field].has(value);
 
-  // console.log(filteredRowData);
-
   const [dndState, setDndState] = useState(null);
 
   if (initialColDefs && !dndState) {
@@ -99,7 +102,44 @@ export default function App() {
 
   const colDefs = !dndState
     ? null
-    : [...dndState.rowGroups, ...dndState.columns, ...dndState.values];
+    : dndState.rowGroups.length > 0
+    ? [...dndState.rowGroups, ...dndState.values]
+    : dndState.columns;
+
+  const groupedData = useMemo(() => {
+    if (dndState) {
+      const rowGroups = dndState.rowGroups.map(({ field }) => field);
+
+      const groups = groupData(filteredRowData, rowGroups).filter(
+        ({ depth }) => depth === rowGroups.length
+      );
+
+      /*
+      tidy(data, summarize({
+  stdev: deviation('value'),
+})
+  */
+
+      return groups.map(({ group, rows }) => ({
+        ...group,
+        ...tidy(
+          rows,
+          summarize(
+            Object.fromEntries(
+              dndState.values.map(({ aggFunction = "sum", field }) => [
+                field,
+                agg2Tidy[aggFunction](field),
+              ])
+            )
+          )
+        )[0],
+      }));
+    }
+
+    return null;
+  }, [filteredRowData, dndState]);
+
+  console.log(groupedData);
 
   const toggleColVisibility = ({ target: { checked, value, name } }) =>
     setDndState((state) =>
@@ -117,6 +157,25 @@ export default function App() {
       )
     );
 
+  const gridData =
+    dndState && dndState.rowGroups.length > 0 ? groupedData : filteredRowData;
+
+  const updateAggFunction = (listId, field, aggFunction) =>
+    setDndState((state) =>
+      Object.fromEntries(
+        Object.entries(state).map((entry) =>
+          entry[0] !== listId
+            ? entry
+            : [
+                entry[0],
+                entry[1].map((el) =>
+                  el.field !== field ? el : { ...el, aggFunction }
+                ),
+              ]
+        )
+      )
+    );
+
   return (
     <main className="container">
       <SubContainer>
@@ -126,40 +185,60 @@ export default function App() {
           itemIdKey="field"
           state={dndState}
         >
-          {({ field, hide }, listId) => (
-            <div className="d-flex align-items-center">
-              <FormCheck
-                onChange={toggleColVisibility}
-                checked={!hide}
-                value={field}
-                name={listId}
-              ></FormCheck>
-              <Popover>
-                <DropdownButton>{field}</DropdownButton>
-                <DropdownMenu>
-                  {(fieldValues && field in fieldValues
-                    ? fieldValues[field]
-                    : []
-                  ).map((value) => (
-                    <DropdownItem
-                      onClick={() =>
-                        toggleDropdownValue(field, value, setDropdowns)
-                      }
-                      active={isDropdownItemActive(field, value)}
-                      key={value}
-                    >
-                      {value}
-                    </DropdownItem>
-                  ))}
-                </DropdownMenu>
-              </Popover>
-            </div>
+          {({ aggFunction = "sum", field, hide }, listId) => (
+            <>
+              {listId === "values" ? (
+                <Popover>
+                  <span>{`${aggFunction}(${field})`}</span>
+                  <DropdownMenu>
+                    {Object.keys(agg2Tidy).map((agg) => (
+                      <DropdownItem
+                        onClick={() => updateAggFunction(listId, field, agg)}
+                        active={agg === aggFunction}
+                        key={agg}
+                      >
+                        {agg}
+                      </DropdownItem>
+                    ))}
+                  </DropdownMenu>
+                </Popover>
+              ) : (
+                field
+              )}
+            </>
+            // <div className="d-flex align-items-center">
+            //   <FormCheck
+            //     onChange={toggleColVisibility}
+            //     checked={!hide}
+            //     value={field}
+            //     name={listId}
+            //   ></FormCheck>
+            //   <Popover>
+            //     <DropdownButton>{field}</DropdownButton>
+            //     <DropdownMenu>
+            //       {(fieldValues && field in fieldValues
+            //         ? fieldValues[field]
+            //         : []
+            //       ).map((value) => (
+            //         <DropdownItem
+            //           onClick={() =>
+            //             toggleDropdownValue(field, value, setDropdowns)
+            //           }
+            //           active={isDropdownItemActive(field, value)}
+            //           key={value}
+            //         >
+            //           {value}
+            //         </DropdownItem>
+            //       ))}
+            //     </DropdownMenu>
+            //   </Popover>
+            // </div>
           )}
         </MultipleDndLists>
       </SubContainer>
       <SubContainer>
         <div style={{ height: 500 }}>
-          <AgGridReact rowData={filteredRowData} columnDefs={colDefs} />
+          <AgGridReact columnDefs={colDefs} rowData={gridData} />
         </div>
       </SubContainer>
     </main>

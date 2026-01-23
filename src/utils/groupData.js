@@ -14,7 +14,7 @@ const groupData = (data = [], groupKeys = []) => {
 
     let group = {};
 
-    cols.forEach((col) => {
+    cols.forEach((col, i) => {
       const value = row[col];
 
       group[col] = value;
@@ -22,6 +22,7 @@ const groupData = (data = [], groupKeys = []) => {
       if (!(value in level)) {
         level[value] = {
           group: { ...group },
+          depth: i + 1,
           node: {},
           rows: [],
         };
