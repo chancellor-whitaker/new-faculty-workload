@@ -25,9 +25,7 @@ import Popover from "./components/Popover";
 import groupData from "./utils/groupData";
 import useData from "./hooks/useData";
 
-// add total row
 // identify what has been filtered (hidden by list)
-// pivoting (similar to ag grid pivot mode col toolbar)
 
 // const descriptiveFields = [
 //   "instructor_department",
@@ -52,7 +50,14 @@ import useData from "./hooks/useData";
 // ! what happens if you choose pivot mode on ag grid tool bar?
 // ! dropdowns need "all" buttons
 
-// avg, count, first, last, max, min, sum
+// don't need first & last
+// want count & count distinct
+// clean up
+// default view
+// make drag n drop blocks similar to ag grid design
+// color coded columns (talk to bethany)
+// total row
+// how to receive default dropdowns (test with 1 college first)
 
 const agg2Tidy = { first, count, last, sum, max, min, avg };
 
