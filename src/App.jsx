@@ -106,6 +106,7 @@ export default function App() {
     ? [...dndState.rowGroups, ...dndState.values]
     : dndState.columns;
 
+  // ? fix this
   const groupedData = useMemo(() => {
     if (dndState) {
       const rowGroups = dndState.rowGroups.map(({ field }) => field);
@@ -126,10 +127,14 @@ export default function App() {
           rows,
           summarize(
             Object.fromEntries(
-              dndState.values.map(({ aggFunction = "sum", field }) => [
-                field,
-                agg2Tidy[aggFunction](field),
-              ])
+              dndState.values
+                .map(({ aggFunction = ["sum"], field }) =>
+                  aggFunction.map((name) => [
+                    `${name}(${field})`,
+                    agg2Tidy[name](field),
+                  ])
+                )
+                .flat()
             )
           )
         )[0],
@@ -160,7 +165,17 @@ export default function App() {
   const gridData =
     dndState && dndState.rowGroups.length > 0 ? groupedData : filteredRowData;
 
-  const updateAggFunction = (listId, field, aggFunction) =>
+  // ? fix this
+  const gridColDefs = useMemo(
+    () =>
+      [
+        ...new Set([gridData].filter(Boolean).flat().map(Object.keys).flat()),
+      ].map((field) => ({ field })),
+    [gridData]
+  );
+
+  // ? fix this
+  const updateAggFunction = (listId, field, agg) =>
     setDndState((state) =>
       Object.fromEntries(
         Object.entries(state).map((entry) =>
@@ -169,12 +184,30 @@ export default function App() {
             : [
                 entry[0],
                 entry[1].map((el) =>
-                  el.field !== field ? el : { ...el, aggFunction }
+                  el.field !== field
+                    ? el
+                    : {
+                        ...el,
+                        aggFunction: el.aggFunction.includes(agg)
+                          ? el.aggFunction.filter((name) => name !== agg)
+                          : [...el.aggFunction, agg],
+                      }
                 ),
               ]
         )
       )
     );
+
+  if (dndState && dndState.values.some((obj) => !("aggFunction" in obj))) {
+    setDndState((state) => ({
+      ...state,
+      values: state.values.map((obj) =>
+        !("aggFunction" in obj) ? { ...obj, aggFunction: ["sum"] } : obj
+      ),
+    }));
+  }
+
+  console.log(dndState);
 
   return (
     <main className="container">
@@ -185,16 +218,16 @@ export default function App() {
           itemIdKey="field"
           state={dndState}
         >
-          {({ aggFunction = "sum", field, hide }, listId) => (
+          {({ aggFunction = ["sum"], field, hide }, listId) => (
             <>
               {listId === "values" ? (
                 <Popover>
-                  <span>{`${aggFunction}(${field})`}</span>
+                  <span>{field}</span>
                   <DropdownMenu>
                     {Object.keys(agg2Tidy).map((agg) => (
                       <DropdownItem
                         onClick={() => updateAggFunction(listId, field, agg)}
-                        active={agg === aggFunction}
+                        active={aggFunction.includes(agg)}
                         key={agg}
                       >
                         {agg}
@@ -238,7 +271,7 @@ export default function App() {
       </SubContainer>
       <SubContainer>
         <div style={{ height: 500 }}>
-          <AgGridReact columnDefs={colDefs} rowData={gridData} />
+          <AgGridReact columnDefs={gridColDefs} rowData={gridData} />
         </div>
       </SubContainer>
     </main>
