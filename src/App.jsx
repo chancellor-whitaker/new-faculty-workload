@@ -1,10 +1,9 @@
 import {
+  nDistinct as distinct,
   mean as avg,
   n as count,
   summarize,
-  first,
   tidy,
-  last,
   sum,
   max,
   min,
@@ -50,16 +49,24 @@ import useData from "./hooks/useData";
 // ! what happens if you choose pivot mode on ag grid tool bar?
 // ! dropdowns need "all" buttons
 
-// don't need first & last
-// want count & count distinct
+// * don't need first & last
+// * want count & count distinct
+// * make drag n drop blocks similar to ag grid design
+// * total row
 // clean up
-// default view
-// make drag n drop blocks similar to ag grid design
-// color coded columns (talk to bethany)
-// total row
+// re-include filters
 // how to receive default dropdowns (test with 1 college first)
+// default view
+// color coded columns (talk to bethany)
 
-const agg2Tidy = { first, count, last, sum, max, min, avg };
+const agg2Tidy = {
+  distinct,
+  count,
+  sum,
+  max,
+  min,
+  avg,
+};
 
 export default function App() {
   const rowData = useData("data.json");
@@ -105,14 +112,8 @@ export default function App() {
     setDndState({ columns: initialColDefs, rowGroups: [], values: [] });
   }
 
-  const colDefs = !dndState
-    ? null
-    : dndState.rowGroups.length > 0
-    ? [...dndState.rowGroups, ...dndState.values]
-    : dndState.columns;
-
   // ? fix this
-  const groupedData = useMemo(() => {
+  const { pinnedTopRowData, groupedData } = useMemo(() => {
     if (dndState) {
       const rowGroups = dndState.rowGroups.map(({ field }) => field);
 
@@ -126,27 +127,36 @@ export default function App() {
 })
   */
 
-      return groups.map(({ group, rows }) => ({
-        ...group,
-        ...tidy(
-          rows,
-          summarize(
-            Object.fromEntries(
-              dndState.values
-                .map(({ aggFunction = ["sum"], field }) =>
-                  aggFunction.map((name) => [
-                    `${name}(${field})`,
-                    agg2Tidy[name](field),
-                  ])
-                )
-                .flat()
+      const everyGroupedRow = groups.map(({ rows }) => rows).flat();
+
+      const handleAgg = ({ group, rows }) => {
+        return {
+          ...group,
+          ...tidy(
+            rows,
+            summarize(
+              Object.fromEntries(
+                dndState.values
+                  .map(({ aggFunction = ["sum"], field }) =>
+                    aggFunction.map((name) => [
+                      `${name}(${field})`,
+                      agg2Tidy[name](field),
+                    ])
+                  )
+                  .flat()
+              )
             )
-          )
-        )[0],
-      }));
+          )[0],
+        };
+      };
+
+      return {
+        pinnedTopRowData: [handleAgg({ rows: everyGroupedRow })],
+        groupedData: groups.map(handleAgg),
+      };
     }
 
-    return null;
+    return { pinnedTopRowData: null, groupedData: null };
   }, [filteredRowData, dndState]);
 
   console.log(groupedData);
@@ -276,7 +286,11 @@ export default function App() {
       </SubContainer>
       <SubContainer>
         <div style={{ height: 500 }}>
-          <AgGridReact columnDefs={gridColDefs} rowData={gridData} />
+          <AgGridReact
+            pinnedTopRowData={pinnedTopRowData}
+            columnDefs={gridColDefs}
+            rowData={gridData}
+          />
         </div>
       </SubContainer>
     </main>
