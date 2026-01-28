@@ -9,6 +9,7 @@ import {
   min,
 } from "@tidyjs/tidy";
 import { AgGridReact } from "ag-grid-react";
+import { Str } from "@supercharge/strings";
 import { useState, useMemo } from "react";
 
 import toggleDropdownValue from "./utils/toggleDropdownValue";
@@ -23,6 +24,8 @@ import FormCheck from "./components/FormCheck";
 import Popover from "./components/Popover";
 import groupData from "./utils/groupData";
 import useData from "./hooks/useData";
+
+const toTitleCase = (key) => Str(key).title().words().join(" ");
 
 // identify what has been filtered (hidden by list)
 
@@ -59,6 +62,19 @@ import useData from "./hooks/useData";
 // default view
 // color coded columns (talk to bethany)
 
+const autoSizeFn = (e) => {
+  const colDefs = e.api.getColumnDefs();
+  if (e.type === "gridSizeChanged") {
+    if (e.clientWidth / colDefs.length > 150) {
+      e.api.sizeColumnsToFit();
+    } else {
+      e.api.autoSizeAllColumns();
+    }
+  } else {
+    e.api.sizeColumnsToFit();
+  }
+};
+
 const agg2Tidy = {
   distinct,
   count,
@@ -68,31 +84,46 @@ const agg2Tidy = {
   avg,
 };
 
+const findParentheses = (str) => {
+  return str.match(/\((.*)\)/).pop();
+};
+
 export default function App() {
   const rowData = useData("data.json");
 
-  const { initialDropdowns, initialColDefs, fieldValues } = useMemo(() => {
-    const fieldValues = !Array.isArray(rowData)
-      ? null
-      : getFieldValues(rowData);
-
-    const initialColDefs =
-      fieldValues === null
+  const { initialDropdowns, initialColDefs, fieldValues, headerNames } =
+    useMemo(() => {
+      const fieldValues = !Array.isArray(rowData)
         ? null
-        : Object.keys(fieldValues).map((field) => ({ field }));
+        : getFieldValues(rowData);
 
-    const initialDropdowns =
-      fieldValues === null
-        ? null
-        : Object.fromEntries(
-            Object.entries(fieldValues).map(([field, values]) => [
-              field,
-              new Set(values),
-            ])
-          );
+      const initialColDefs =
+        fieldValues === null
+          ? null
+          : Object.keys(fieldValues).map((field) => ({ field }));
 
-    return { initialDropdowns, initialColDefs, fieldValues };
-  }, [rowData]);
+      const initialDropdowns =
+        fieldValues === null
+          ? null
+          : Object.fromEntries(
+              Object.entries(fieldValues).map(([field, values]) => [
+                field,
+                new Set(values),
+              ])
+            );
+
+      const headerNames =
+        fieldValues === null
+          ? null
+          : Object.fromEntries(
+              Object.keys(fieldValues).map((field) => [
+                field,
+                toTitleCase(field),
+              ])
+            );
+
+      return { initialDropdowns, initialColDefs, fieldValues, headerNames };
+    }, [rowData]);
 
   const [dropdowns, setDropdowns] = useState(null);
 
@@ -159,8 +190,6 @@ export default function App() {
     return { pinnedTopRowData: null, groupedData: null };
   }, [filteredRowData, dndState]);
 
-  console.log(groupedData);
-
   const toggleColVisibility = ({ target: { checked, value, name } }) =>
     setDndState((state) =>
       Object.fromEntries(
@@ -180,16 +209,13 @@ export default function App() {
   const gridData =
     dndState && dndState.rowGroups.length > 0 ? groupedData : filteredRowData;
 
-  // ? fix this
-  const gridColDefs = useMemo(
-    () =>
-      [
-        ...new Set([gridData].filter(Boolean).flat().map(Object.keys).flat()),
-      ].map((field) => ({ field })),
-    [gridData]
-  );
+  const getHeaderName = (field) =>
+    headerNames && field in headerNames ? headerNames[field] : field;
 
-  // ? fix this
+  const gridColDefs = [
+    ...new Set([gridData].filter(Boolean).flat().map(Object.keys).flat()),
+  ].map((field) => ({ field }));
+
   const updateAggFunction = (listId, field, agg) =>
     setDndState((state) =>
       Object.fromEntries(
@@ -222,7 +248,20 @@ export default function App() {
     }));
   }
 
-  console.log(dndState);
+  const headerValueGetter = ({ colDef: { field } }) => {
+    if (headerNames && field in headerNames) {
+      return headerNames[field];
+    }
+
+    if (findParentheses(field)) {
+      return field.replace(
+        findParentheses(field),
+        headerNames[findParentheses(field)]
+      );
+    }
+
+    return field;
+  };
 
   return (
     <main className="container">
@@ -237,7 +276,7 @@ export default function App() {
             <>
               {listId === "values" ? (
                 <Popover>
-                  <span>{field}</span>
+                  <span>{getHeaderName(field)}</span>
                   <DropdownMenu>
                     {Object.keys(agg2Tidy).map((agg) => (
                       <DropdownItem
@@ -251,7 +290,7 @@ export default function App() {
                   </DropdownMenu>
                 </Popover>
               ) : (
-                field
+                getHeaderName(field)
               )}
             </>
             // <div className="d-flex align-items-center">
@@ -287,7 +326,13 @@ export default function App() {
       <SubContainer>
         <div style={{ height: 500 }}>
           <AgGridReact
+            defaultColDef={{
+              headerValueGetter,
+            }}
+            autoSizeStrategy={{ type: "fitCellContents" }}
             pinnedTopRowData={pinnedTopRowData}
+            onGridSizeChanged={autoSizeFn}
+            onRowDataUpdated={autoSizeFn}
             columnDefs={gridColDefs}
             rowData={gridData}
           />
