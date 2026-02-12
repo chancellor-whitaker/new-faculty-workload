@@ -6,3 +6,10 @@ body {
   ) !important;
   overflow-y: scroll;
 }
+
+.flexible-dropdown label {
+  font-size: x-large !important;
+}
+.font-xl button {
+  font-size: x-large !important;
+}

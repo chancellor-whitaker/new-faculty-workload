@@ -11,9 +11,12 @@
   },
   "dependencies": {
     "@hello-pangea/dnd": "^18.0.1",
+    "@paciolan/remote-component": "^2.13.0",
+    "@paciolan/remote-module-loader": "^3.0.3",
     "@supercharge/strings": "^2.0.0",
     "@tidyjs/tidy": "^2.5.2",
     "ag-grid-react": "^35.0.0",
+    "axios": "^1.13.5",
     "react": "^19.2.0",
     "react-dom": "^19.2.0"
   },
